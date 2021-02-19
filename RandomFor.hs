@@ -1,6 +1,8 @@
 import System.Random
 import System.Random.Shuffle
 
+import Data.Time.Clock.POSIX
+
 import Language
 
 instance Random For where
@@ -9,14 +11,7 @@ instance Random For where
           allNodes = niladicNodes ++ unaryNodes ++ binaryNodes
   randomR range g =
     case range of
-      (V len, V k) -> (f', g')
-        where nWithVerum    = (k+1) * (sum $ countArb len (k+1))
-              nWithoutVerum = sum $ countArb len k
-              (choice, g0)  = randomR (1, nWithVerum + nWithoutVerum) g
-              (v, g1)       = randomR (0, k) g0
-              (k', v')      = if choice <= nWithVerum then (k+1, v) else (k, k)
-              (f, g')       = generateArb len k' g1
-              f'            = varToVerum v' f
+      (V len, V k) -> generateArb len k g
       _            -> random g
 
 
@@ -29,19 +24,19 @@ nBinaryNodes  = length binaryNodes
 
 
 -- |Oblicza n!. Zapamiętuje wszystkie obliczone wcześniej wartości.
-factorial :: Int -> Int
+factorial :: Int -> Integer
 factorial 0 = 1
-factorial n = n * factorialCache!!(n-1)
+factorial n = (toInteger n) * factorialCache!!(n-1)
 factorialCache = [factorial n | n <- [0..]]
 
 
 -- |Oblicza liczbę podziałów zbioru n-elementowego na k rozdzielnych
 -- podzbiorów. Zapamiętuje wszystkie obliczone wcześniej wartości.
-stirling :: Int -> Int -> Int
+stirling :: Int -> Int -> Integer
 stirling n k
   | n < k            = 0
   | n == k || k == 1 = 1
-  | otherwise        = stirlingCache!!(n-1)!!(k-1) + k*stirlingCache!!(n-1)!!k
+  | otherwise        = stirlingCache!!(n-1)!!(k-1) + (toInteger k)*stirlingCache!!(n-1)!!k
 stirlingCache = [[stirling n k | k <- [0..]] | n <- [0..]]
 
 
@@ -64,15 +59,15 @@ arity x
 
 -- |Zwraca liczbę formuł o sprecyzowanej długości @len@,
 -- liczbie instancji zmiennych @n@ oraz liczbie różnych zmiennych @k@.
-countDet :: Int -> Int -> Int -> Int
+countDet :: Int -> Int -> Int -> Integer
 countDet len n k
   | len == 0  = 0
   | otherwise = (factorial (len-1))
                 `div` (factorial n)
                 `div` (factorial u)
                 `div` (factorial b)
-                * (nBinaryNodes^b)
-                * (nUnaryNodes^u)
+                * ((toInteger nBinaryNodes)^b)
+                * ((toInteger nUnaryNodes)^u)
                 * (stirling n k)
   where b = n - 1
         u = len - b - n
@@ -82,7 +77,7 @@ countDet len n k
 -- oraz liczbie różnych zmiennych @k@. Zwrócony wynik jest w postaci ciągu
 -- wyników cząstkowych takich, że na @n@-tej pozycji jest liczba formuł
 -- o @k+n@ instancjach zmiennych.
-countArb :: Int -> Int -> [Int]
+countArb :: Int -> Int -> [Integer]
 countArb len 0 = []
 countArb len k = map (\n -> countDet len n k) [k .. (len+1) `div` 2]
 
@@ -109,7 +104,7 @@ randomSamples list n g = (map (list !!) indexes, g1)
 -- wybrana z tych wartości, przy czym szanse jej wylosowania są równe stosunkowi
 -- przypisanej wagi do sumy wszystkich wag w wejściowym ciągu. Funkcja zwraca
 -- parę wybranego elementu z nowym stanem generatora liczb pseudolosowych.
-weightedChoice :: RandomGen g => [(Int, a)] -> g -> (a, g)
+weightedChoice :: RandomGen g => [(Integer, a)] -> g -> (a, g)
 weightedChoice weights g = ((snd$head$filter (\(x, _) -> r <= x) intervals), g')
   where intervals = scanl1 (\(x, _) (y, a) -> (x+y, a)) weights
         (r, g') = randomR (1, fst $ last intervals) g
@@ -167,8 +162,8 @@ generateRGF n k g
   | n == k    = ([0..n-1], g)
   | otherwise = (rgf, g')
   where a = stirling (n-1) (k-1)
-        b = k*(stirling (n-1) k)
-        (r, g1) = randomR (1 :: Int, a+b) g
+        b = (toInteger k)*(stirling (n-1) k)
+        (r, g1) = randomR (1, a+b) g
         (shorter, g2) = if r <= a then
           generateRGF (n-1) (k-1) g1
         else
